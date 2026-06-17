@@ -1,0 +1,93 @@
+---
+- name: Create vault group
+  group:
+    name: "{{ vault_group }}"
+    system: yes
+    state: present
+
+- name: Create vault user
+  user:
+    name: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    shell: "/bin/false"
+    system: yes
+    create_home: no
+    state: present
+
+- name: Create vault directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    mode: "0750"
+  loop:
+    - "{{ vault_config_dir }}"
+    - "{{ vault_data_dir }}"
+    - "{{ vault_log_dir }}"
+
+- name: Download HashiCorp Vault binary
+  get_url:
+    url: "https://releases.hashicorp.com/vault/{{ vault_version }}/vault_{{ vault_version }}_linux_amd64.zip"
+    dest: "/tmp/vault_{{ vault_version }}_linux_amd64.zip"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+
+- name: Unzip Vault binary
+  unarchive:
+    src: "/tmp/vault_{{ vault_version }}_linux_amd64.zip"
+    dest: "{{ vault_install_dir }}"
+    remote_src: yes
+    owner: "root"
+    group: "root"
+    mode: "0755"
+
+- name: Set IPC lock capabilities on Vault binary
+  capabilities:
+    path: "{{ vault_install_dir }}/vault"
+    capability: cap_ipc_lock+ep
+    state: present
+  ignore_errors: yes # Fallback if capabilities module is missing
+
+- name: Fallback setcap command execution
+  command: "setcap cap_ipc_lock=+ep {{ vault_install_dir }}/vault"
+  register: setcap_res
+  failed_when: false
+  changed_when: setcap_res.rc == 0
+
+- name: Deploy vault.hcl configuration
+  template:
+    src: vault.hcl.j2
+    dest: "{{ vault_config_dir }}/vault.hcl"
+    owner: "{{ vault_user }}"
+    group: "{{ vault_group }}"
+    mode: "0640"
+  notify: restart vault
+
+- name: Deploy vault.service systemd unit
+  template:
+    src: vault.service.j2
+    dest: "/etc/systemd/system/vault.service"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  notify:
+    - reload systemd
+    - restart vault
+
+- name: Flush handlers to apply config/service changes immediately
+  meta: flush_handlers
+
+- name: Enable and start vault service
+  service:
+    name: vault
+    state: started
+    enabled: yes
+
+- name: Wait for Vault port 8200 to start listening
+  wait_for:
+    host: "127.0.0.1"
+    port: 8200
+    timeout: 30
+    state: started

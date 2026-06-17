@@ -1,0 +1,22 @@
+---
+vault_version: "1.18.2" # Latest stable/specified version
+vault_install_dir: "/usr/local/bin"
+vault_config_dir: "/etc/vault.d"
+vault_data_dir: "/opt/vault/data"
+vault_log_dir: "/var/log/vault"
+
+vault_user: "vault"
+vault_group: "vault"
+
+vault_port: 8200
+vault_cluster_port: 8201
+
+# Raft Cluster peers to join (used in configuration template)
+# This will extract the hosts and their private IPs dynamically from the inventory
+vault_raft_nodes:
+  - name: "vault-1"
+    address: "{{ hostvars['vault-1']['private_ip'] }}:8200"
+  - name: "vault-2"
+    address: "{{ hostvars['vault-2']['private_ip'] }}:8200"
+  - name: "vault-3"
+    address: "{{ hostvars['vault-3']['private_ip'] }}:8200"

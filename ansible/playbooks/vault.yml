@@ -1,0 +1,12 @@
+---
+- name: Apply common system configuration
+  hosts: vault
+  become: true
+  roles:
+    - common
+
+- name: Install and configure HashiCorp Vault cluster
+  hosts: vault
+  become: true
+  roles:
+    - vault

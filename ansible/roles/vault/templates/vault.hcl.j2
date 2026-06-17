@@ -1,0 +1,27 @@
+# Vault HA Configuration file managed by Ansible
+# Mode: Raft Integrated Storage
+
+ui = true
+disable_mlock = true
+
+storage "raft" {
+  path    = "{{ vault_data_dir }}"
+  node_id = "{{ node_id }}"
+
+  {% for peer in vault_raft_nodes %}
+  retry_join {
+    leader_api_addr = "http://{{ peer.address }}"
+  }
+  {% endfor %}
+}
+
+listener "tcp" {
+  address         = "0.0.0.0:{{ vault_port }}"
+  cluster_address = "0.0.0.0:{{ vault_cluster_port }}"
+  tls_disable     = "true"
+}
+
+# Advertisement addresses
+api_addr     = "http://{{ private_ip }}:{{ vault_port }}"
+cluster_addr = "http://{{ private_ip }}:{{ vault_cluster_port }}"
+log_level    = "Info"

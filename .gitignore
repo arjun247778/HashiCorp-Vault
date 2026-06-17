@@ -1,0 +1,16 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.*
+tfplan
+tfplan.json
+
+# Ansible
+*.retry
+
+# Private Keys and Secrets
+*.pem
+*.key
+credentials/
+secrets/
