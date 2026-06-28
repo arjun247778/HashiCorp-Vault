@@ -60,13 +60,7 @@ pipeline {
             }
         }
 
-        stage('6. Manual Approval') {
-            steps {
-                input message: 'Approve infrastructure deployment?', ok: 'Apply'
-            }
-        }
-
-        stage('7. Terraform Apply') {
+        stage('6. Terraform Apply') {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
@@ -81,7 +75,7 @@ pipeline {
             }
         }
 
-        stage('8. Generate Dynamic Inventory') {
+        stage('7. Generate Dynamic Inventory') {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
@@ -94,7 +88,7 @@ pipeline {
             }
         }
 
-        stage('9. Ansible Ping') {
+        stage('8. Ansible Ping') {
             steps {
                 withCredentials([sshUserPrivateKey(credentialsId: 'vault-ssh-key-id', keyFileVariable: 'SSH_KEY_PATH', usernameVariable: 'SSH_USER')]) {
                     sh '''
@@ -110,7 +104,7 @@ pipeline {
             }
         }
 
-        stage('10. Install Vault Cluster') {
+        stage('9. Install Vault Cluster') {
             steps {
                 withCredentials([sshUserPrivateKey(credentialsId: 'vault-ssh-key-id', keyFileVariable: 'SSH_KEY_PATH')]) {
                     sh '''
@@ -125,7 +119,7 @@ pipeline {
             }
         }
 
-        stage('11. Verify Vault Health') {
+        stage('10. Verify Vault Health') {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
@@ -164,7 +158,7 @@ pipeline {
             }
         }
 
-        stage('12. Publish Outputs') {
+        stage('11. Publish Outputs') {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
@@ -185,7 +179,7 @@ pipeline {
             }
         }
 
-        stage('13. Archive Artifacts') {
+        stage('12. Archive Artifacts') {
             steps {
                 archiveArtifacts artifacts: 'ansible/inventories/inventory.ini, terraform/terraform.tfstate*', allowEmptyArchive: true
             }
