@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    parameters {
+        booleanParam(name: 'DESTROY_INFRA', defaultValue: false, description: 'Check this box to DESTROY all infrastructure instead of deploying.')
+    }
+
     environment {
         AWS_DEFAULT_REGION = 'us-east-1'
         TF_IN_AUTOMATION   = 'true'
@@ -29,23 +33,50 @@ pipeline {
             }
         }
 
-        stage('3. Terraform Format Check') {
+        stage('3. Terraform Destroy') {
+            when {
+                expression { return params.DESTROY_INFRA == true }
+            }
             steps {
-                dir('terraform') {
-                    sh 'terraform fmt -check -recursive'
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-credentials-id',
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                ]]) {
+                    dir('terraform') {
+                        sh 'terraform destroy -auto-approve'
+                    }
                 }
             }
         }
 
-        stage('4. Terraform Validate') {
-            steps {
-                dir('terraform') {
-                    sh 'terraform validate'
+        stage('4. Terraform Checks') {
+            when {
+                expression { return params.DESTROY_INFRA == false }
+            }
+            parallel {
+                stage('Format Check') {
+                    steps {
+                        dir('terraform') {
+                            sh 'terraform fmt -check -recursive'
+                        }
+                    }
+                }
+                stage('Validate') {
+                    steps {
+                        dir('terraform') {
+                            sh 'terraform validate'
+                        }
+                    }
                 }
             }
         }
 
         stage('5. Terraform Plan') {
+            when {
+                expression { return params.DESTROY_INFRA == false }
+            }
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
@@ -61,6 +92,9 @@ pipeline {
         }
 
         stage('6. Terraform Apply') {
+            when {
+                expression { return params.DESTROY_INFRA == false }
+            }
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
@@ -69,13 +103,16 @@ pipeline {
                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
                 ]]) {
                     dir('terraform') {
-                        sh 'terraform apply -input=false tfplan'
+                        sh 'terraform apply -input=false -parallelism=20 tfplan'
                     }
                 }
             }
         }
 
         stage('7. Generate Dynamic Inventory') {
+            when {
+                expression { return params.DESTROY_INFRA == false }
+            }
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
@@ -88,23 +125,10 @@ pipeline {
             }
         }
 
-        stage('8. Ansible Ping') {
-            steps {
-                withCredentials([sshUserPrivateKey(credentialsId: 'vault-ssh-key-id', keyFileVariable: 'SSH_KEY_PATH', usernameVariable: 'SSH_USER')]) {
-                    sh '''
-                        mkdir -p ~/.ssh
-                        rm -f ~/.ssh/vault-key.pem
-                        cp "${SSH_KEY_PATH}" ~/.ssh/vault-key.pem
-                        chmod 400 ~/.ssh/vault-key.pem
-                        pkill -u $(whoami) -f "ssh: /var/lib/jenkins/.ansible/cp" || true
-                        cd ansible
-                        ansible all -m ping -i inventories/inventory.ini
-                    '''
-                }
+        stage('8. Setup SSH Key') {
+            when {
+                expression { return params.DESTROY_INFRA == false }
             }
-        }
-
-        stage('9. Install Vault Cluster') {
             steps {
                 withCredentials([sshUserPrivateKey(credentialsId: 'vault-ssh-key-id', keyFileVariable: 'SSH_KEY_PATH')]) {
                     sh '''
@@ -112,14 +136,40 @@ pipeline {
                         rm -f ~/.ssh/vault-key.pem
                         cp "${SSH_KEY_PATH}" ~/.ssh/vault-key.pem
                         chmod 400 ~/.ssh/vault-key.pem
-                        cd ansible
-                        ansible-playbook -i inventories/inventory.ini playbooks/vault.yml
+                        pkill -u $(whoami) -f "ssh: /var/lib/jenkins/.ansible/cp" || true
                     '''
                 }
             }
         }
 
-        stage('10. Verify Vault Health') {
+        stage('9. Ansible Ping') {
+            when {
+                expression { return params.DESTROY_INFRA == false }
+            }
+            steps {
+                sh '''
+                    cd ansible
+                    ansible all -m ping -i inventories/inventory.ini
+                '''
+            }
+        }
+
+        stage('10. Install Vault Cluster') {
+            when {
+                expression { return params.DESTROY_INFRA == false }
+            }
+            steps {
+                sh '''
+                    cd ansible
+                    ansible-playbook -i inventories/inventory.ini playbooks/vault.yml
+                '''
+            }
+        }
+
+        stage('11. Verify Vault Health') {
+            when {
+                expression { return params.DESTROY_INFRA == false }
+            }
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
@@ -127,19 +177,13 @@ pipeline {
                     accessKeyVariable: 'AWS_ACCESS_KEY_ID',
                     secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
                 ]]) {
-                    withCredentials([sshUserPrivateKey(credentialsId: 'vault-ssh-key-id', keyFileVariable: 'SSH_KEY_PATH')]) {
-                        sh '''
-                        mkdir -p ~/.ssh
-                        rm -f ~/.ssh/vault-key.pem
-                        cp "${SSH_KEY_PATH}" ~/.ssh/vault-key.pem
-                        chmod 400 ~/.ssh/vault-key.pem
-                        
+                    sh '''
                         # Fetch the ALB DNS from terraform output
                         cd terraform
                         ALB_DNS=$(terraform output -raw alb_dns_name)
                         echo "ALB DNS: http://${ALB_DNS}"
                         
-                        # Verify that the health check responds (it will return 501 since it is uninitialized, which is correct for a fresh install)
+                        # Verify that the health check responds
                         echo "Testing API health check endpoint..."
                         curl -s -o /dev/null -w "%{http_code}" "http://${ALB_DNS}/v1/sys/health" || true
                         
@@ -153,12 +197,14 @@ pipeline {
                             -o ProxyCommand="ssh -W %h:%p -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ~/.ssh/vault-key.pem ubuntu@${BASTION_IP}" \
                             ubuntu@${VAULT_IP_1} "systemctl status vault --no-pager"
                     '''
-                    }
                 }
             }
         }
 
-        stage('11. Publish Outputs') {
+        stage('12. Publish Outputs') {
+            when {
+                expression { return params.DESTROY_INFRA == false }
+            }
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
@@ -179,7 +225,10 @@ pipeline {
             }
         }
 
-        stage('12. Archive Artifacts') {
+        stage('13. Archive Artifacts') {
+            when {
+                expression { return params.DESTROY_INFRA == false }
+            }
             steps {
                 archiveArtifacts artifacts: 'ansible/inventories/inventory.ini, terraform/terraform.tfstate*', allowEmptyArchive: true
             }
