@@ -4,7 +4,7 @@ data "aws_ami" "ubuntu" {
 
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
+    values = [var.ami_filter]
   }
 
   filter {
@@ -15,14 +15,14 @@ data "aws_ami" "ubuntu" {
 
 resource "aws_instance" "bastion" {
   ami                    = data.aws_ami.ubuntu.id
-  instance_type          = "t3.micro" # Bastion can be small
+  instance_type          = var.bastion_instance_type
   subnet_id              = var.public_subnet_id
   vpc_security_group_ids = [var.bastion_sg_id]
   key_name               = var.key_name
 
   root_block_device {
-    volume_size           = 20
-    volume_type           = "gp3"
+    volume_size           = var.bastion_volume_size
+    volume_type           = var.volume_type
     encrypted             = true
     delete_on_termination = true
   }
@@ -30,14 +30,14 @@ resource "aws_instance" "bastion" {
   tags = merge(
     var.tags,
     {
-      Name = "vault-bastion"
+      Name = "${var.project_name}-bastion"
       Role = "bastion"
     }
   )
 }
 
 resource "aws_instance" "vault" {
-  count = 3
+  count = var.vault_node_count
 
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.instance_type
@@ -47,8 +47,8 @@ resource "aws_instance" "vault" {
   iam_instance_profile   = var.instance_profile_name
 
   root_block_device {
-    volume_size           = 30
-    volume_type           = "gp3"
+    volume_size           = var.vault_volume_size
+    volume_type           = var.volume_type
     encrypted             = true
     delete_on_termination = true
   }
@@ -56,7 +56,7 @@ resource "aws_instance" "vault" {
   tags = merge(
     var.tags,
     {
-      Name = "vault-${count.index + 1}"
+      Name = "${var.project_name}-${count.index + 1}"
       Role = "vault"
     }
   )

@@ -9,7 +9,7 @@ resource "aws_subnet" "public" {
   tags = merge(
     var.tags,
     {
-      Name = "vault-public-subnet-${each.key}"
+      Name = "${var.project_name}-public-subnet-${each.key}"
     }
   )
 }
@@ -24,7 +24,7 @@ resource "aws_subnet" "private" {
   tags = merge(
     var.tags,
     {
-      Name = "vault-private-subnet-${each.key}"
+      Name = "${var.project_name}-private-subnet-${each.key}"
     }
   )
 }
@@ -40,7 +40,7 @@ resource "aws_route_table" "public" {
   tags = merge(
     var.tags,
     {
-      Name = "vault-public-rt"
+      Name = "${var.project_name}-public-rt"
     }
   )
 }
@@ -58,7 +58,7 @@ resource "aws_route_table" "private" {
   tags = merge(
     var.tags,
     {
-      Name = "vault-private-rt"
+      Name = "${var.project_name}-private-rt"
     }
   )
 }

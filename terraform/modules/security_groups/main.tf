@@ -1,12 +1,12 @@
 resource "aws_security_group" "bastion" {
-  name        = "vault-bastion-sg"
+  name        = "${var.project_name}-bastion-sg"
   description = "Security group for Bastion host"
   vpc_id      = var.vpc_id
 
   ingress {
     description = "SSH from allowed IP"
-    from_port   = 22
-    to_port     = 22
+    from_port   = var.ssh_port
+    to_port     = var.ssh_port
     protocol    = "tcp"
     cidr_blocks = [var.allowed_ip]
   }
@@ -22,13 +22,13 @@ resource "aws_security_group" "bastion" {
   tags = merge(
     var.tags,
     {
-      Name = "vault-bastion-sg"
+      Name = "${var.project_name}-bastion-sg"
     }
   )
 }
 
 resource "aws_security_group" "alb" {
-  name        = "vault-alb-sg"
+  name        = "${var.project_name}-alb-sg"
   description = "Security group for Application Load Balancer"
   vpc_id      = var.vpc_id
 
@@ -59,36 +59,36 @@ resource "aws_security_group" "alb" {
   tags = merge(
     var.tags,
     {
-      Name = "vault-alb-sg"
+      Name = "${var.project_name}-alb-sg"
     }
   )
 }
 
 resource "aws_security_group" "vault" {
-  name        = "vault-node-sg"
+  name        = "${var.project_name}-node-sg"
   description = "Security group for Vault nodes"
   vpc_id      = var.vpc_id
 
   ingress {
     description     = "Vault API from ALB"
-    from_port       = 8200
-    to_port         = 8200
+    from_port       = var.vault_api_port
+    to_port         = var.vault_api_port
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
 
   ingress {
     description = "Vault Cluster traffic from Vault Nodes"
-    from_port   = 8201
-    to_port     = 8201
+    from_port   = var.vault_cluster_port
+    to_port     = var.vault_cluster_port
     protocol    = "tcp"
     self        = true
   }
 
   ingress {
     description     = "SSH from Bastion"
-    from_port       = 22
-    to_port         = 22
+    from_port       = var.ssh_port
+    to_port         = var.ssh_port
     protocol        = "tcp"
     security_groups = [aws_security_group.bastion.id]
   }
@@ -96,16 +96,16 @@ resource "aws_security_group" "vault" {
   # Also allow 8200 from self and bastion so that nodes can join each other, and bastion can check health if needed
   ingress {
     description = "Vault API from internal cluster nodes"
-    from_port   = 8200
-    to_port     = 8200
+    from_port   = var.vault_api_port
+    to_port     = var.vault_api_port
     protocol    = "tcp"
     self        = true
   }
 
   ingress {
     description     = "Vault API from Bastion"
-    from_port       = 8200
-    to_port         = 8200
+    from_port       = var.vault_api_port
+    to_port         = var.vault_api_port
     protocol        = "tcp"
     security_groups = [aws_security_group.bastion.id]
   }
@@ -121,7 +121,7 @@ resource "aws_security_group" "vault" {
   tags = merge(
     var.tags,
     {
-      Name = "vault-node-sg"
+      Name = "${var.project_name}-node-sg"
     }
   )
 }

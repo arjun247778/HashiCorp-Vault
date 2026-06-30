@@ -1,7 +1,18 @@
 variable "instance_type" {
   type        = string
-  description = "The EC2 instance type for Bastion and Vault nodes"
-  default     = "t3.medium"
+  description = "The EC2 instance type for Vault nodes"
+}
+
+variable "bastion_instance_type" {
+  type        = string
+  description = "The EC2 instance type for the Bastion host"
+  default     = "t3.micro"
+}
+
+variable "vault_node_count" {
+  type        = number
+  description = "Number of Vault server nodes to deploy"
+  default     = 3
 }
 
 variable "key_name" {
@@ -32,6 +43,36 @@ variable "vault_sg_id" {
 variable "instance_profile_name" {
   type        = string
   description = "The IAM instance profile name for the Vault nodes"
+}
+
+variable "bastion_volume_size" {
+  type        = number
+  description = "Root volume size in GB for the Bastion host"
+  default     = 20
+}
+
+variable "vault_volume_size" {
+  type        = number
+  description = "Root volume size in GB for the Vault nodes"
+  default     = 30
+}
+
+variable "volume_type" {
+  type        = string
+  description = "EBS volume type for all instances"
+  default     = "gp3"
+}
+
+variable "ami_filter" {
+  type        = string
+  description = "AMI name filter pattern for Ubuntu"
+  default     = "ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"
+}
+
+variable "project_name" {
+  type        = string
+  description = "Project name prefix used for resource naming"
+  default     = "vault"
 }
 
 variable "tags" {

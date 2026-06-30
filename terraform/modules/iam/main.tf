@@ -1,5 +1,5 @@
 resource "aws_iam_role" "vault" {
-  name        = "vault-instance-role"
+  name        = "${var.project_name}-instance-role"
   description = "IAM role for Vault EC2 instances"
 
   assume_role_policy = jsonencode({
@@ -19,7 +19,7 @@ resource "aws_iam_role" "vault" {
 }
 
 resource "aws_iam_role_policy" "vault" {
-  name = "vault-auto-join-policy"
+  name = "${var.project_name}-auto-join-policy"
   role = aws_iam_role.vault.id
 
   policy = jsonencode({
@@ -37,7 +37,7 @@ resource "aws_iam_role_policy" "vault" {
 }
 
 resource "aws_iam_instance_profile" "vault" {
-  name = "vault-instance-profile"
+  name = "${var.project_name}-instance-profile"
   role = aws_iam_role.vault.name
 
   tags = var.tags
